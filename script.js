@@ -45,13 +45,23 @@ const sampleJobs = [
 ];
 
 const state = {
-  jobs: loadJobs(),
+  jobs: [],
   search: "",
   status: "All",
   sort: "newest",
+  backend: "local",
+  client: null,
+  session: null,
+  isConfigured: false,
 };
 
 const elements = {
+  authForm: document.querySelector("#authForm"),
+  authMessage: document.querySelector("#authMessage"),
+  emailInput: document.querySelector("#emailInput"),
+  signInButton: document.querySelector("#signInButton"),
+  signOutButton: document.querySelector("#signOutButton"),
+  syncStatus: document.querySelector("#syncStatus"),
   form: document.querySelector("#jobForm"),
   formTitle: document.querySelector("#formTitle"),
   resetFormButton: document.querySelector("#resetFormButton"),
@@ -76,6 +86,8 @@ const elements = {
   template: document.querySelector("#jobCardTemplate"),
 };
 
+elements.authForm.addEventListener("submit", signInWithEmail);
+elements.signOutButton.addEventListener("click", signOut);
 elements.form.addEventListener("submit", saveJob);
 elements.resetFormButton.addEventListener("click", resetForm);
 elements.searchInput.addEventListener("input", (event) => {
@@ -94,9 +106,83 @@ elements.exportButton.addEventListener("click", exportJobs);
 elements.importButton.addEventListener("click", () => elements.importInput.click());
 elements.importInput.addEventListener("change", importJobs);
 
-render();
+init();
 
-function loadJobs() {
+async function init() {
+  const config = window.JOB_TRACKER_SUPABASE || {};
+  state.isConfigured = Boolean(config.url && config.anonKey && window.supabase);
+
+  if (!state.isConfigured) {
+    state.jobs = loadLocalJobs();
+    setSyncStatus("Local mode", "Add Supabase settings to sync across devices.");
+    render();
+    return;
+  }
+
+  state.client = window.supabase.createClient(config.url, config.anonKey);
+  const { data } = await state.client.auth.getSession();
+  await applySession(data.session);
+
+  state.client.auth.onAuthStateChange(async (_event, session) => {
+    await applySession(session);
+  });
+}
+
+async function applySession(session) {
+  state.session = session;
+
+  if (!session) {
+    state.backend = "local";
+    state.jobs = loadLocalJobs();
+    elements.emailInput.hidden = false;
+    elements.signInButton.hidden = false;
+    elements.signOutButton.hidden = true;
+    setSyncStatus("Local mode", "Sign in to sync your applications across devices.");
+    render();
+    return;
+  }
+
+  state.backend = "supabase";
+  elements.emailInput.hidden = true;
+  elements.signInButton.hidden = true;
+  elements.signOutButton.hidden = false;
+  setSyncStatus("Syncing", `Signed in as ${session.user.email}.`);
+  await loadSupabaseJobs();
+}
+
+async function signInWithEmail(event) {
+  event.preventDefault();
+  if (!state.isConfigured) {
+    setSyncStatus("Setup needed", "Paste your Supabase URL and anon key into supabase-config.js first.");
+    return;
+  }
+
+  const email = elements.emailInput.value.trim();
+  if (!email) return;
+
+  elements.signInButton.disabled = true;
+  const { error } = await state.client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href.split("#")[0],
+    },
+  });
+  elements.signInButton.disabled = false;
+
+  if (error) {
+    setSyncStatus("Sign-in failed", error.message);
+    return;
+  }
+
+  setSyncStatus("Check email", "Open the Supabase sign-in link from your email.");
+}
+
+async function signOut() {
+  if (!state.client) return;
+  await state.client.auth.signOut();
+}
+
+function loadLocalJobs() {
   const storedJobs = localStorage.getItem(STORAGE_KEY);
   if (!storedJobs) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sampleJobs));
@@ -111,11 +197,29 @@ function loadJobs() {
   }
 }
 
-function persistJobs() {
+function persistLocalJobs() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.jobs));
 }
 
-function saveJob(event) {
+async function loadSupabaseJobs() {
+  const { data, error } = await state.client
+    .from("job_applications")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    setSyncStatus("Sync error", error.message);
+    state.jobs = loadLocalJobs();
+    render();
+    return;
+  }
+
+  state.jobs = data.map(fromDatabaseJob);
+  setSyncStatus("Synced", `${state.jobs.length} applications loaded from Supabase.`);
+  render();
+}
+
+async function saveJob(event) {
   event.preventDefault();
 
   const job = {
@@ -134,13 +238,34 @@ function saveJob(event) {
       : new Date().toISOString(),
   };
 
+  if (state.backend === "supabase") {
+    await saveSupabaseJob(job);
+    return;
+  }
+
   state.jobs = state.jobs.some((item) => item.id === job.id)
     ? state.jobs.map((item) => (item.id === job.id ? job : item))
     : [job, ...state.jobs];
 
-  persistJobs();
+  persistLocalJobs();
   resetForm();
   render();
+}
+
+async function saveSupabaseJob(job) {
+  const payload = toDatabaseJob(job);
+  const query = elements.jobId.value
+    ? state.client.from("job_applications").update(payload).eq("id", job.id).select().single()
+    : state.client.from("job_applications").insert(payload).select().single();
+  const { error } = await query;
+
+  if (error) {
+    setSyncStatus("Save failed", error.message);
+    return;
+  }
+
+  resetForm();
+  await loadSupabaseJobs();
 }
 
 function editJob(id) {
@@ -161,15 +286,25 @@ function editJob(id) {
   elements.company.focus();
 }
 
-function deleteJob(id) {
+async function deleteJob(id) {
   const job = state.jobs.find((item) => item.id === id);
   if (!job) return;
 
   const confirmed = confirm(`Delete ${job.company} - ${job.role}?`);
   if (!confirmed) return;
 
+  if (state.backend === "supabase") {
+    const { error } = await state.client.from("job_applications").delete().eq("id", id);
+    if (error) {
+      setSyncStatus("Delete failed", error.message);
+      return;
+    }
+    await loadSupabaseJobs();
+    return;
+  }
+
   state.jobs = state.jobs.filter((item) => item.id !== id);
-  persistJobs();
+  persistLocalJobs();
   render();
 }
 
@@ -290,25 +425,21 @@ function importJobs(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.addEventListener("load", () => {
+  reader.addEventListener("load", async () => {
     try {
       const importedJobs = JSON.parse(reader.result);
       if (!Array.isArray(importedJobs)) throw new Error("Backup must contain a job list.");
-      state.jobs = importedJobs.map((job) => ({
-        id: job.id || crypto.randomUUID(),
-        company: job.company || "",
-        role: job.role || "",
-        status: statuses.includes(job.status) ? job.status : "Saved",
-        priority: ["High", "Medium", "Low"].includes(job.priority) ? job.priority : "Medium",
-        appliedDate: job.appliedDate || "",
-        followUpDate: job.followUpDate || "",
-        link: job.link || "",
-        contact: job.contact || "",
-        notes: job.notes || "",
-        createdAt: job.createdAt || new Date().toISOString(),
-      }));
-      persistJobs();
-      render();
+      const normalizedJobs = importedJobs.map(normalizeImportedJob);
+
+      if (state.backend === "supabase") {
+        const { error } = await state.client.from("job_applications").upsert(normalizedJobs.map(toDatabaseJob));
+        if (error) throw error;
+        await loadSupabaseJobs();
+      } else {
+        state.jobs = normalizedJobs;
+        persistLocalJobs();
+        render();
+      }
     } catch (error) {
       alert(`Import failed: ${error.message}`);
     } finally {
@@ -316,6 +447,60 @@ function importJobs(event) {
     }
   });
   reader.readAsText(file);
+}
+
+function normalizeImportedJob(job) {
+  return {
+    id: job.id || crypto.randomUUID(),
+    company: job.company || "",
+    role: job.role || "",
+    status: statuses.includes(job.status) ? job.status : "Saved",
+    priority: ["High", "Medium", "Low"].includes(job.priority) ? job.priority : "Medium",
+    appliedDate: job.appliedDate || job.applied_date || "",
+    followUpDate: job.followUpDate || job.follow_up_date || "",
+    link: job.link || "",
+    contact: job.contact || "",
+    notes: job.notes || "",
+    createdAt: job.createdAt || job.created_at || new Date().toISOString(),
+  };
+}
+
+function toDatabaseJob(job) {
+  return {
+    id: job.id,
+    user_id: state.session.user.id,
+    company: job.company,
+    role: job.role,
+    status: job.status,
+    priority: job.priority,
+    applied_date: job.appliedDate || null,
+    follow_up_date: job.followUpDate || null,
+    link: job.link || null,
+    contact: job.contact || null,
+    notes: job.notes || null,
+    created_at: job.createdAt,
+  };
+}
+
+function fromDatabaseJob(job) {
+  return {
+    id: job.id,
+    company: job.company,
+    role: job.role,
+    status: job.status,
+    priority: job.priority,
+    appliedDate: job.applied_date || "",
+    followUpDate: job.follow_up_date || "",
+    link: job.link || "",
+    contact: job.contact || "",
+    notes: job.notes || "",
+    createdAt: job.created_at,
+  };
+}
+
+function setSyncStatus(label, message) {
+  elements.syncStatus.textContent = label;
+  elements.authMessage.textContent = message;
 }
 
 function formatDate(value) {

@@ -87,6 +87,55 @@ main {
 
 .topbar-actions {
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.auth-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
+  gap: 18px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(217, 222, 216, 0.9);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.auth-panel h2,
+.auth-panel p {
+  margin: 0;
+}
+
+.auth-panel p {
+  color: var(--muted);
+}
+
+.auth-panel code {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.auth-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid rgba(36, 118, 90, 0.22);
+  border-radius: 999px;
+  background: rgba(36, 118, 90, 0.1);
+  color: var(--green);
+  padding: 0 14px;
+  font-size: 0.82rem;
+  font-weight: 900;
 }
 
 .summary-grid {
@@ -411,6 +460,7 @@ dd {
 
 @media (max-width: 920px) {
   .summary-grid,
+  .auth-panel,
   .workspace {
     grid-template-columns: 1fr 1fr;
   }
@@ -439,9 +489,16 @@ dd {
   .topbar,
   .tracker-toolbar,
   .field-row,
+  .auth-panel,
+  .auth-form,
   .job-main {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .auth-panel,
+  .auth-form {
+    display: flex;
   }
 
   .summary-grid,

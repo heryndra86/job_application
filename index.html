@@ -17,6 +17,7 @@
         <h1>Job Hunt Tracker</h1>
       </div>
       <div class="topbar-actions">
+        <span class="sync-pill" id="syncStatus">Local mode</span>
         <button class="icon-button" id="importButton" type="button" title="Import backup" aria-label="Import backup">
           <span aria-hidden="true">Import</span>
         </button>
@@ -28,6 +29,22 @@
     </header>
 
     <main>
+      <section class="auth-panel" aria-label="Account sync">
+        <div>
+          <p class="eyebrow">Cloud sync</p>
+          <h2>Sync your tracker with Supabase</h2>
+          <p id="authMessage">Add your Supabase settings in <code>supabase-config.js</code>, then sign in with email.</p>
+        </div>
+        <form id="authForm" class="auth-form">
+          <label>
+            Email
+            <input id="emailInput" name="email" type="email" placeholder="you@example.com" autocomplete="email" />
+          </label>
+          <button class="primary-button" id="signInButton" type="submit">Send sign-in link</button>
+          <button class="ghost-button" id="signOutButton" type="button" hidden>Sign out</button>
+        </form>
+      </section>
+
       <section class="summary-grid" aria-label="Job hunt summary">
         <article class="metric">
           <span class="metric-label">Applications</span>
@@ -218,6 +235,8 @@
       </article>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
