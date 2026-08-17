@@ -24,8 +24,8 @@ Then visit `http://localhost:8000`.
 ## Deploy to GitHub Pages
 
 1. Push these files to `https://github.com/heryndra86/job_application`.
-3. In GitHub, open `Settings > Pages`.
-4. Set the source to `Deploy from a branch`, branch `main`, folder `/root`.
-5. Visit `https://heryndra86.github.io/job_application/`.
+2. In GitHub, open `Settings > Pages`.
+3. Set the source to `GitHub Actions`.
+4. Visit `https://heryndra86.github.io/job_application/` after the deploy workflow finishes.
 
 Your tracker data is stored in the browser you use to access the site. Use `Export` regularly if you want a backup you can move between devices.
