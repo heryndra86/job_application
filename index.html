@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A personal job hunting tracker for applications, interview stages, follow-ups, and outcomes."
+    />
+    <title>Job Hunt Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Personal workspace</p>
+        <h1>Job Hunt Tracker</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-button" id="importButton" type="button" title="Import backup" aria-label="Import backup">
+          <span aria-hidden="true">Import</span>
+        </button>
+        <button class="icon-button" id="exportButton" type="button" title="Export backup" aria-label="Export backup">
+          <span aria-hidden="true">Export</span>
+        </button>
+        <input id="importInput" type="file" accept="application/json" hidden />
+      </div>
+    </header>
+
+    <main>
+      <section class="summary-grid" aria-label="Job hunt summary">
+        <article class="metric">
+          <span class="metric-label">Applications</span>
+          <strong id="totalApplications">0</strong>
+          <small id="weeklyApplications">0 this week</small>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Interviews</span>
+          <strong id="interviewCount">0</strong>
+          <small>Active interview stages</small>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Follow-ups due</span>
+          <strong id="followUpsDue">0</strong>
+          <small>Due today or earlier</small>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Offer rate</span>
+          <strong id="offerRate">0%</strong>
+          <small>Offers from applications</small>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="panel form-panel" aria-label="Add or edit application">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Application details</p>
+              <h2 id="formTitle">Add job</h2>
+            </div>
+            <button id="resetFormButton" class="ghost-button" type="button">Clear</button>
+          </div>
+
+          <form id="jobForm">
+            <input type="hidden" id="jobId" />
+            <label>
+              Company
+              <input id="company" name="company" type="text" placeholder="OpenAI" required />
+            </label>
+            <label>
+              Role
+              <input id="role" name="role" type="text" placeholder="Product Engineer" required />
+            </label>
+            <div class="field-row">
+              <label>
+                Status
+                <select id="status" name="status">
+                  <option>Saved</option>
+                  <option>Applied</option>
+                  <option>Screening</option>
+                  <option>Interview</option>
+                  <option>Offer</option>
+                  <option>Rejected</option>
+                </select>
+              </label>
+              <label>
+                Priority
+                <select id="priority" name="priority">
+                  <option>High</option>
+                  <option selected>Medium</option>
+                  <option>Low</option>
+                </select>
+              </label>
+            </div>
+            <div class="field-row">
+              <label>
+                Applied
+                <input id="appliedDate" name="appliedDate" type="date" />
+              </label>
+              <label>
+                Follow-up
+                <input id="followUpDate" name="followUpDate" type="date" />
+              </label>
+            </div>
+            <label>
+              Link
+              <input id="link" name="link" type="url" placeholder="https://..." />
+            </label>
+            <label>
+              Contact
+              <input id="contact" name="contact" type="text" placeholder="Recruiter or referral" />
+            </label>
+            <label>
+              Notes
+              <textarea id="notes" name="notes" rows="4" placeholder="Interview prep, salary range, next step..."></textarea>
+            </label>
+            <button class="primary-button" type="submit">Save application</button>
+          </form>
+        </aside>
+
+        <section class="tracker">
+          <div class="tracker-toolbar">
+            <label class="search-label">
+              Search
+              <input id="searchInput" type="search" placeholder="Company, role, notes..." />
+            </label>
+            <label>
+              Status
+              <select id="statusFilter">
+                <option value="All">All</option>
+                <option>Saved</option>
+                <option>Applied</option>
+                <option>Screening</option>
+                <option>Interview</option>
+                <option>Offer</option>
+                <option>Rejected</option>
+              </select>
+            </label>
+            <label>
+              Sort
+              <select id="sortSelect">
+                <option value="newest">Newest</option>
+                <option value="followUp">Follow-up</option>
+                <option value="priority">Priority</option>
+                <option value="company">Company</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="pipeline" aria-label="Pipeline overview">
+            <div class="stage" data-stage="Saved">
+              <span>Saved</span>
+              <strong id="stageSaved">0</strong>
+            </div>
+            <div class="stage" data-stage="Applied">
+              <span>Applied</span>
+              <strong id="stageApplied">0</strong>
+            </div>
+            <div class="stage" data-stage="Screening">
+              <span>Screening</span>
+              <strong id="stageScreening">0</strong>
+            </div>
+            <div class="stage" data-stage="Interview">
+              <span>Interview</span>
+              <strong id="stageInterview">0</strong>
+            </div>
+            <div class="stage" data-stage="Offer">
+              <span>Offer</span>
+              <strong id="stageOffer">0</strong>
+            </div>
+          </div>
+
+          <div id="emptyState" class="empty-state" hidden>
+            <h2>Start with your next role</h2>
+            <p>Add an application to see your pipeline, follow-ups, and progress here.</p>
+          </div>
+
+          <div id="jobList" class="job-list" aria-live="polite"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="jobCardTemplate">
+      <article class="job-card">
+        <div class="job-main">
+          <div>
+            <div class="job-title-row">
+              <h3></h3>
+              <span class="status-pill"></span>
+            </div>
+            <p class="role"></p>
+          </div>
+          <div class="job-actions">
+            <button class="text-button edit-button" type="button">Edit</button>
+            <button class="text-button danger-button delete-button" type="button">Delete</button>
+          </div>
+        </div>
+        <dl class="job-meta">
+          <div>
+            <dt>Applied</dt>
+            <dd class="applied-date"></dd>
+          </div>
+          <div>
+            <dt>Follow-up</dt>
+            <dd class="follow-up-date"></dd>
+          </div>
+          <div>
+            <dt>Priority</dt>
+            <dd class="priority"></dd>
+          </div>
+          <div>
+            <dt>Contact</dt>
+            <dd class="contact"></dd>
+          </div>
+        </dl>
+        <p class="notes"></p>
+        <a class="job-link" target="_blank" rel="noreferrer">Open posting</a>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
