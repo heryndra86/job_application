@@ -34,7 +34,9 @@ window.JOB_TRACKER_SUPABASE = {
 https://heryndra86.github.io/job_application/
 ```
 
-The app uses email magic-link sign-in. Each signed-in user can only read and change their own applications.
+The app supports email/password sign-in and optional magic-link email sign-in. Each signed-in user can only read and change their own applications.
+
+If you are testing on Supabase's built-in email sender, magic links can hit a low rate limit. Use email/password sign-in for normal testing, or configure your own SMTP provider in Supabase for higher email limits.
 
 ## Run locally
 

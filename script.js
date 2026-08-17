@@ -59,7 +59,10 @@ const elements = {
   authForm: document.querySelector("#authForm"),
   authMessage: document.querySelector("#authMessage"),
   emailInput: document.querySelector("#emailInput"),
+  passwordInput: document.querySelector("#passwordInput"),
   signInButton: document.querySelector("#signInButton"),
+  signUpButton: document.querySelector("#signUpButton"),
+  magicLinkButton: document.querySelector("#magicLinkButton"),
   signOutButton: document.querySelector("#signOutButton"),
   syncStatus: document.querySelector("#syncStatus"),
   form: document.querySelector("#jobForm"),
@@ -86,7 +89,9 @@ const elements = {
   template: document.querySelector("#jobCardTemplate"),
 };
 
-elements.authForm.addEventListener("submit", signInWithEmail);
+elements.authForm.addEventListener("submit", signInWithPassword);
+elements.signUpButton.addEventListener("click", signUpWithPassword);
+elements.magicLinkButton.addEventListener("click", sendMagicLink);
 elements.signOutButton.addEventListener("click", signOut);
 elements.form.addEventListener("submit", saveJob);
 elements.resetFormButton.addEventListener("click", resetForm);
@@ -135,22 +140,28 @@ async function applySession(session) {
     state.backend = "local";
     state.jobs = loadLocalJobs();
     elements.emailInput.hidden = false;
+    elements.passwordInput.hidden = false;
     elements.signInButton.hidden = false;
+    elements.signUpButton.hidden = false;
+    elements.magicLinkButton.hidden = false;
     elements.signOutButton.hidden = true;
-    setSyncStatus("Local mode", "Sign in to sync your applications across devices.");
+    setSyncStatus("Local mode", "Sign in or create an account to sync your applications across devices.");
     render();
     return;
   }
 
   state.backend = "supabase";
   elements.emailInput.hidden = true;
+  elements.passwordInput.hidden = true;
   elements.signInButton.hidden = true;
+  elements.signUpButton.hidden = true;
+  elements.magicLinkButton.hidden = true;
   elements.signOutButton.hidden = false;
   setSyncStatus("Syncing", `Signed in as ${session.user.email}.`);
   await loadSupabaseJobs();
 }
 
-async function signInWithEmail(event) {
+async function signInWithPassword(event) {
   event.preventDefault();
   if (!state.isConfigured) {
     setSyncStatus("Setup needed", "Paste your Supabase URL and anon key into supabase-config.js first.");
@@ -158,19 +169,82 @@ async function signInWithEmail(event) {
   }
 
   const email = elements.emailInput.value.trim();
-  if (!email) return;
+  const password = elements.passwordInput.value;
+  if (!email || !password) {
+    setSyncStatus("Missing details", "Enter your email and password.");
+    return;
+  }
 
   elements.signInButton.disabled = true;
+  const { error } = await state.client.auth.signInWithPassword({
+    email,
+    password,
+  });
+  elements.signInButton.disabled = false;
+
+  if (error) {
+    setSyncStatus("Sign-in failed", error.message);
+    return;
+  }
+}
+
+async function signUpWithPassword() {
+  if (!state.isConfigured) {
+    setSyncStatus("Setup needed", "Paste your Supabase URL and anon key into supabase-config.js first.");
+    return;
+  }
+
+  const email = elements.emailInput.value.trim();
+  const password = elements.passwordInput.value;
+  if (!email || password.length < 6) {
+    setSyncStatus("Missing details", "Enter your email and a password with at least 6 characters.");
+    return;
+  }
+
+  elements.signUpButton.disabled = true;
+  const { error } = await state.client.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: window.location.href.split("#")[0],
+    },
+  });
+  elements.signUpButton.disabled = false;
+
+  if (error) {
+    setSyncStatus("Sign-up failed", error.message);
+    return;
+  }
+
+  setSyncStatus("Account created", "If Supabase asks for confirmation, check your email. Otherwise, sign in now.");
+}
+
+async function sendMagicLink() {
+  if (!state.isConfigured) {
+    setSyncStatus("Setup needed", "Paste your Supabase URL and anon key into supabase-config.js first.");
+    return;
+  }
+
+  const email = elements.emailInput.value.trim();
+  if (!email) {
+    setSyncStatus("Missing email", "Enter your email before requesting a sign-in link.");
+    return;
+  }
+
+  elements.magicLinkButton.disabled = true;
   const { error } = await state.client.auth.signInWithOtp({
     email,
     options: {
       emailRedirectTo: window.location.href.split("#")[0],
     },
   });
-  elements.signInButton.disabled = false;
+  elements.magicLinkButton.disabled = false;
 
   if (error) {
-    setSyncStatus("Sign-in failed", error.message);
+    const message = error.message.includes("rate limit")
+      ? "Supabase email limit reached. Wait before trying email link again, or use password sign-in."
+      : error.message;
+    setSyncStatus("Email link failed", message);
     return;
   }
 
